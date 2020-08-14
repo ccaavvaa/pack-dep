@@ -1,12 +1,16 @@
 {
   "name": "@phoenix/pack-dep",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "pack-dep",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "author": "catalin",
   "license": "MIT",
   "bin": "./bin/pack-dep",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ccaavvaa/pack-dep.git"
+  },
   "scripts": {
     "build": "gulp",
     "test": "mocha",
@@ -49,5 +53,9 @@
     "read-pkg-up": "^7.0.1",
     "semver": "^7.3.2",
     "simple-git": "^2.17.0"
+  },
+  "publishConfig": {
+    "registry": "http://verdaccio",
+    "access": "public"
   }
 }
