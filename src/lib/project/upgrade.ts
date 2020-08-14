@@ -11,18 +11,15 @@ import { Stats } from 'fs';
 export type UpgradeType = 'major' | 'minor' | 'patch';
 export interface PackageUpgradeIntention {
     name: string;
-    type?: UpgradeType;
+    type: UpgradeType;
 }
 export type PackageUpgradeIntentions = PackageUpgradeIntention[];
-export interface PackageChange extends PackageUpgradeIntention {
-    oldVersion: string;
-    newVersion: string;
-}
 export type UpgradeStatus = 'planned' | 'folder-updated' | 'published';
-export interface PackageUpgrade extends PackageChange {
+export interface PackageUpgrade extends PackageUpgradeIntention {
     folder: string;
     repository: string;
-    changes: PackageChange[];
+    oldVersion: string;
+    changes: string[];
     status: UpgradeStatus;
 }
 interface UpgradePlanData {
@@ -69,10 +66,9 @@ export class UpgradeIntention {
     public add(name: string, type?: UpgradeType) {
         let intention = this.getIntention(name);
         if (!intention) {
-            intention = { name };
+            intention = { name, type: type || 'minor' };
             this.intentions.push(intention);
-        }
-        if (type) {
+        } else if (type) {
             intention.type = type;
         }
     }
@@ -157,12 +153,11 @@ export class Upgrade {
             const changes = changedDependencies.length ?
                 packageUpgrades
                     .filter((c) => changedDependencies.indexOf(c.name) >= 0)
-                    .map((c) => ({ name: c.name, oldVersion: c.oldVersion, newVersion: c.newVersion }))
+                    .map((c) => c.name)
                 : [];
             const packageUpgrade: PackageUpgrade = {
                 ...intention,
                 oldVersion,
-                newVersion,
                 folder,
                 repository,
                 changes,
@@ -184,23 +179,23 @@ export class Upgrade {
     public async executeEtape(plan: UpgradePlan) {
         const currentPackageUpgrade = plan.upgrades.find((pu) => pu.status !== 'published');
         if (currentPackageUpgrade) {
-            await this.executePackage(currentPackageUpgrade, plan.repositoryUrl);
+            await this.executePackage(currentPackageUpgrade, plan);
         } else {
             console.log('Nothing to upgrade');
         }
     }
-    public async executePackage(pu: PackageUpgrade, npmRegistry: string) {
+    public async executePackage(pu: PackageUpgrade, plan: UpgradePlan) {
         if (pu.status === 'planned') {
-            await this.executeUpdateFolder(pu);
+            await this.executeUpdateFolder(pu, plan);
         } else if (pu.status === 'folder-updated') {
-            await this.executePublish(pu, npmRegistry);
+            await this.executePublish(pu, plan);
         } else if (pu.status === 'published') {
             console.log(`Nothing to do for ${pu.name}`);
         } else {
             throw new Error(`Invalid status ${pu.status}`);
         }
     }
-    public async executePublish(pu: PackageUpgrade, npmRegistry: string) {
+    public async executePublish(pu: PackageUpgrade, plan: UpgradePlan) {
         const packageFolder = pu.folder;
         await this.gitIsClean(packageFolder);
         const packageJson = await spinner(`Load manifest file for ${pu.name}`, async () => {
@@ -210,17 +205,18 @@ export class Upgrade {
             }
             return manifest.packageJson;
         });
-        if (npmRegistry) {
-            await spinner(`Set npm repository ${npmRegistry}`, async () => {
+        if (plan.repositoryUrl) {
+            await spinner(`Set npm repository ${plan.repositoryUrl}`, async () => {
                 packageJson.publishConfig = {
-                    registry: npmRegistry,
+                    registry: plan.repositoryUrl,
                 };
             });
         } else if (!packageJson.publishConfig || !packageJson.publishConfig.registry) {
             throw new Error('Npm repository is not defined');
         }
+        const newVersion = Upgrade.getNewVersion(pu.oldVersion, pu.type);
         await spinner('Change version', async () => {
-            packageJson.version = pu.newVersion;
+            packageJson.version = newVersion;
         });
         await spinner('Save changes', async () => {
             await saveManifest(packageJson, packageFolder);
@@ -232,7 +228,7 @@ export class Upgrade {
         await spinner('Commit changes', async () => {
             await Git.commit(packageFolder, 'publish', 'package.json');
         });
-        const tag = `v${pu.newVersion}`;
+        const tag = `v${newVersion}`;
         await spinner(`Add Tag ${tag}`, async () => {
             await Git.addTag(packageFolder, tag);
         });
@@ -242,7 +238,7 @@ export class Upgrade {
         pu.status = 'published';
         await spinner('OK');
     }
-    public async executeUpdateFolder(pu: PackageUpgrade) {
+    public async executeUpdateFolder(pu: PackageUpgrade, plan: UpgradePlan) {
         const packageFolder = pu.folder;
         let stat: Stats;
         try {
@@ -273,8 +269,10 @@ export class Upgrade {
                 }
                 return manifest.packageJson;
             });
-            for (const change of pu.changes) {
-                const v = `^${change.newVersion}`;
+            for (const changeName of pu.changes) {
+                const change = plan.upgrades.find((u) => u.name === changeName);
+                const newVersion = Upgrade.getNewVersion(change.oldVersion, change.type);
+                const v = `^${newVersion}`;
                 await spinner(`Change ${change.name} version to ${v}`, async () => {
                     changePackageVersion(packageJson, change.name, v);
                 });
@@ -288,7 +286,7 @@ export class Upgrade {
             await y.install();
         });
         await spinner('Commit changes', async () => {
-            let updatedPackages = pu.changes.map((c) => c.name).join(',');
+            let updatedPackages = pu.changes.join(',');
             if (updatedPackages) {
                 updatedPackages = ' '.concat(updatedPackages);
             }

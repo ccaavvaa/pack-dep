@@ -2,18 +2,15 @@ import { PackageDeps } from '../deps/package-deps';
 export declare type UpgradeType = 'major' | 'minor' | 'patch';
 export interface PackageUpgradeIntention {
     name: string;
-    type?: UpgradeType;
+    type: UpgradeType;
 }
 export declare type PackageUpgradeIntentions = PackageUpgradeIntention[];
-export interface PackageChange extends PackageUpgradeIntention {
-    oldVersion: string;
-    newVersion: string;
-}
 export declare type UpgradeStatus = 'planned' | 'folder-updated' | 'published';
-export interface PackageUpgrade extends PackageChange {
+export interface PackageUpgrade extends PackageUpgradeIntention {
     folder: string;
     repository: string;
-    changes: PackageChange[];
+    oldVersion: string;
+    changes: string[];
     status: UpgradeStatus;
 }
 interface UpgradePlanData {
@@ -47,9 +44,9 @@ export declare class Upgrade {
     fillDependents(): void;
     createPlan(npmRepository: string): Promise<UpgradePlan>;
     executeEtape(plan: UpgradePlan): Promise<void>;
-    executePackage(pu: PackageUpgrade, npmRegistry: string): Promise<void>;
-    executePublish(pu: PackageUpgrade, npmRegistry: string): Promise<void>;
-    executeUpdateFolder(pu: PackageUpgrade): Promise<void>;
+    executePackage(pu: PackageUpgrade, plan: UpgradePlan): Promise<void>;
+    executePublish(pu: PackageUpgrade, plan: UpgradePlan): Promise<void>;
+    executeUpdateFolder(pu: PackageUpgrade, plan: UpgradePlan): Promise<void>;
     private gitIsClean;
 }
 export {};
