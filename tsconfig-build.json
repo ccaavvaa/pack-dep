@@ -1,0 +1,23 @@
+﻿{
+    "compilerOptions": {
+        "declaration": true,
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "noImplicitAny": true,
+        "outDir": "./build",
+        "newLine": "CRLF",
+        "preserveConstEnums": true,
+        "removeComments": false,
+        "sourceMap": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "target": "es2017",
+        "rootDirs": [
+            "src"
+        ]
+    },
+    "exclude": [],
+    "include": [
+        "src/build/**/*.ts",
+    ]
+}
